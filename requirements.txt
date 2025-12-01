@@ -47,4 +47,6 @@ tzdata==2025.2
 uritemplate==4.2.0
 urllib3==2.5.0
 uvicorn==0.38.0
+google-generativeai
+Pillow # Цей пакет потрібен для імпорту 'from PIL import Image'
 websockets==15.0.1

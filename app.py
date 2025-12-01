@@ -2,6 +2,10 @@ import os
 import requests
 import json
 from datetime import datetime, timedelta
+# !!! ІМПОРТУЄМО ДЛЯ РОБОТИ З ЗОБРАЖЕННЯМИ !!!
+from PIL import Image 
+from io import BytesIO 
+# ---------------------------------------------
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
@@ -12,11 +16,9 @@ from dotenv import load_dotenv
 load_dotenv() 
 
 # --- КОНФІГУРАЦІЯ ---
-# Читаємо ключі зі змінних середовища. Render.com і .env роблять це автоматично.
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 MONO_TOKEN = os.environ.get("MONO_TOKEN")
 
-# Створюємо клієнта замість configure()
 if GEMINI_API_KEY:
     client = genai.Client(api_key=GEMINI_API_KEY)
 else:
@@ -39,7 +41,7 @@ async def get_mono_transactions():
     if not MONO_TOKEN:
         raise HTTPException(status_code=500, detail="MONO_TOKEN не налаштований у змінних середовища.")
 
-    # ... (інша логіка Monobank залишається без змін) ...
+    # ... (логіка Monobank залишається без змін) ...
     to_time = int(datetime.now().timestamp())
     from_time = int((datetime.now() - timedelta(days=7)).timestamp())
     account = "0" 
@@ -67,17 +69,26 @@ async def get_mono_transactions():
 # --- МОДУЛЬ 2: Сканер Чеків (ШІ) ---
 @app.post("/scan-receipt")
 async def scan_receipt(file: UploadFile = File(...)):
-    if not client: # Перевірка, чи клієнт створений
-         raise HTTPException(status_code=500, detail="GEMINI_API_KEY не налаштований.")
+    if not client: 
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY не налаштований.")
     
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="Потрібне зображення.")
 
+    # 1. Читання та підготовка зображення
     try:
+        # Читаємо байти файлу, надісланого Flutter
         image_data = await file.read()
-        sample_file = genai.upload_file(file=image_data, display_name=file.filename)
-        model = client.models.get('gemini-1.5-flash') # Отримуємо модель через клієнта
         
+        # Створюємо об'єкт PIL Image з байтів
+        image = Image.open(BytesIO(image_data))
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Помилка читання або відкриття зображення: {e}")
+
+
+    # 2. Виклик Gemini API
+    try:
         prompt = """
         Ти фінансовий асистент. Проаналізуй це фото чека.
         Витягни дані у форматі чистого JSON (без markdown і пояснень):
@@ -93,17 +104,22 @@ async def scan_receipt(file: UploadFile = File(...)):
         Якщо чогось не видно, постав null.
         """
         
-        response = model.generate_content([sample_file, prompt])
-        genai.delete_file(sample_file.name)
+        # Передаємо prompt та об'єкт Image напряму
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[image, prompt] # image йде першим
+        )
 
+        # 3. Очищення та повернення JSON
         clean_json = response.text.replace('```json', '').replace('```', '').strip()
         data = json.loads(clean_json)
         return data
     
     except APIError as e:
         raise HTTPException(status_code=500, detail=f"Помилка Gemini API: {e}")
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail=f"ШІ повернув невірний JSON: {response.text}")
+    except json.JSONDecodeError as e:
+        # Якщо ШІ повернув не валідний JSON
+        raise HTTPException(status_code=500, detail=f"ШІ повернув невірний JSON. Помилка парсингу: {e}. Відповідь ШІ: {response.text[:200]}...")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Невідома помилка: {e}")
 
