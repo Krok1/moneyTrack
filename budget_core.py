@@ -5,8 +5,8 @@ import google.generativeai as genai
 from datetime import datetime
 
 # --- КОНФІГУРАЦІЯ (Встав сюди свої ключі) ---
-GEMINI_API_KEY = "AIzaSyCejM_0b04AzhWsCA4KD-s3TK8lRnKFhbw"
-MONO_TOKEN = "uuzj8czntWwFN_Xmw_5okxtPd4bgF-UmdUhyYJE5PC38"
+GEMINI_API_KEY = "-s3TK8l12414124"
+MONO_TOKEN = "-U123124PC38"
 
 # Налаштування AI
 genai.configure(api_key=GEMINI_API_KEY)
