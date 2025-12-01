@@ -1,0 +1,6 @@
+# .gitignore
+# Усі секретні ключі
+.env
+# Кеш та залежності Python
+__pycache__/
+venv/
